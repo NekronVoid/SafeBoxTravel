@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SafeBoxTravel — Telemetría IoT Terminal</title>
+  
+  <!-- Google Fonts: Silkscreen & Share Tech Mono (Pixel & Terminal style) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* Definicion de la fuente local m6x11 */
+    @font-face {
+        font-family: 'm6x11';
+        src: url('./m6x11.ttf') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+        
+    }
+    body {
+      font-family: 'm6x11', monospace !important;
+      -webkit-font-smoothing: none;
+        -moz-osx-font-smoothing: unset;
+        
+    }
+    .font-pixel {
+      font-family: 'm6x11', monospace;
+    }
+    /* Pixel Grid background effect */
+    .bg-pixel-grid {
+      background-image: linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px),
+                        linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 16px 16px;
+    }
+  </style>
+</head>
+<body class="bg-black text-slate-200 min-h-screen flex flex-col bg-pixel-grid">
+
+  <!-- 1. BARRA SUPERIOR TERMINAL -->
+  <header class="border-b-2 border-slate-800 bg-slate-950 px-6 py-4">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      
+      <div class="flex items-center gap-3">
+        <div class="w-3 h-8 bg-indigo-500"></div>
+        <div>
+          <h1 class="text-lg md:text-xl font-bold font-pixel tracking-wider text-white uppercase">SafeBoxTravel</h1>
+          <p class="text-xs text-slate-400 font-mono tracking-tight">&gt; SISTEMA_DE_TELEMETRIA_LOGISTICA_V1.0</p>
+        </div>
+      </div>
+
+      <!-- Control IP y Estado WS (Esquinas Rectas) -->
+      <div class="flex flex-wrap items-center gap-3 bg-slate-900 px-4 py-2 border border-slate-800 text-xs">
+        <span class="text-slate-400 font-pixel text-[10px]">HOST_IP:</span>
+        <input id="ipInput" type="text" value="192.168.137.234" class="bg-black text-emerald-400 px-2 py-1 border border-slate-700 w-32 focus:outline-none focus:border-emerald-500 font-mono text-center tracking-wider" />
+        <button onclick="conectarWebSocket()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 font-pixel text-[10px] uppercase transition">
+          CONECTAR
+        </button>
+        <div class="h-4 w-px bg-slate-800 mx-1"></div>
+        <div class="flex items-center gap-2">
+          <span id="statusDot" class="w-2.5 h-2.5 bg-red-500"></span>
+          <span id="statusText" class="font-pixel text-[10px] text-slate-300 uppercase">OFFLINE</span>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- 2. PANEL PRINCIPAL CON DIVISIONES HORIZONTALES -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
+
+    <!-- SECCIÓN METRICAS (DIVISIÓN INDUSTRIAL CON LÍNEAS LATERALES) -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-0 border border-slate-800 bg-slate-950">
+      
+      <!-- Estado Actual -->
+      <div class="p-5 border-b sm:border-b-0 sm:border-r border-slate-800 border-l-4 border-l-indigo-500 flex flex-col justify-between">
+        <span class="text-[10px] font-pixel text-slate-400 uppercase tracking-widest">&gt; ESTADO_ACTUAL</span>
+        <div class="my-4">
+          <span id="badgeEstado" class="inline-block px-2.5 py-1 text-xs font-pixel bg-slate-900 text-slate-400 border border-slate-700">
+            ESPERANDO_DATOS
+          </span>
+        </div>
+        <p class="text-[11px] text-slate-500">// ANALISIS EN TIEMPO REAL</p>
+      </div>
+
+      <!-- Impacto Acelerómetro -->
+      <div class="p-5 border-b sm:border-b-0 lg:border-r border-slate-800 border-l-4 border-l-amber-500 flex flex-col justify-between">
+        <span class="text-[10px] font-pixel text-slate-400 uppercase tracking-widest">&gt; FUERZA_G_MAX</span>
+        <div class="my-2 flex items-baseline gap-2">
+          <span id="valImpacto" class="text-3xl font-bold font-pixel text-white">0.00</span>
+          <span class="text-slate-400 font-pixel text-xs">G</span>
+        </div>
+        <p class="text-[11px] text-slate-500">// UMBRAL CRITICO: &gt; 2.50G</p>
+      </div>
+
+      <!-- Clima -->
+      <div class="p-5 border-b sm:border-b-0 sm:border-r border-slate-800 border-l-4 border-l-cyan-500 flex flex-col justify-between">
+        <span class="text-[10px] font-pixel text-slate-400 uppercase tracking-widest">&gt; AMBIENTAL</span>
+        <div class="my-2 grid grid-cols-2 gap-2 text-center">
+          <div class="border-r border-slate-800 pr-2">
+            <span class="text-[10px] text-slate-500 block font-pixel">TEMP</span>
+            <span id="valTemp" class="text-lg font-bold font-pixel text-amber-400">0.0</span><span class="text-xs text-slate-500 font-pixel">°C</span>
+          </div>
+          <div>
+            <span class="text-[10px] text-slate-500 block font-pixel">HUM</span>
+            <span id="valHum" class="text-lg font-bold font-pixel text-cyan-400">0.0</span><span class="text-xs text-slate-500 font-pixel">%</span>
+          </div>
+        </div>
+        <p class="text-[11px] text-slate-500">// SENSORES DHT11/22</p>
+      </div>
+
+      <!-- Información del Dispositivo -->
+      <div class="p-5 border-l-4 border-l-emerald-500 flex flex-col justify-between">
+        <span class="text-[10px] font-pixel text-slate-400 uppercase tracking-widest">&gt; NODO_EMISOR</span>
+        <div class="my-2">
+          <span id="valNodo" class="text-sm font-bold font-pixel text-emerald-400 block truncate">ESP32_LOGISTICA</span>
+          <span class="text-xs text-slate-300">PAQUETE_SEQ #: <span id="valSeq" class="font-pixel text-white">0</span></span>
+        </div>
+        <p id="valTime" class="text-[11px] text-slate-500 font-mono">// ULTIMA_ACT: --:--:--</p>
+      </div>
+
+    </section>
+
+    <!-- DIVISIONES HORIZONTALES PARA GRÁFICA Y BITÁCORA -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- Contenedor Gráfica (Líneas rectas) -->
+      <div class="lg:col-span-2 border border-slate-800 bg-slate-950 p-5 border-t-2 border-t-indigo-500 flex flex-col">
+        <div class="flex justify-between items-center pb-3 mb-4 border-b border-slate-800">
+          <h2 class="text-xs font-pixel text-slate-200 uppercase tracking-wider">&gt; TELEMETRIA_LINEA_TIEMPO (IMPACTO G)</h2>
+          <span class="text-[10px] text-slate-500 bg-black border border-slate-800 px-2 py-0.5 font-pixel">BUFF: 20 MUESTRAS</span>
+        </div>
+        <div class="flex-1 min-h-[280px]">
+          <canvas id="chartImpacto"></canvas>
+        </div>
+      </div>
+
+      <!-- Contenedor Bitácora / Incidentes -->
+      <div class="border border-slate-800 bg-slate-950 p-5 border-t-2 border-t-amber-500 flex flex-col">
+        <div class="flex justify-between items-center pb-3 mb-4 border-b border-slate-800">
+          <h2 class="text-xs font-pixel text-slate-200 uppercase tracking-wider">&gt; BITACORA_ALERTAS</h2>
+          <button onclick="limpiarBitacora()" class="text-[10px] font-pixel text-slate-400 hover:text-amber-400 uppercase">
+            [LIMPIAR]
+          </button>
+        </div>
+        
+        <div id="listaAlertas" class="flex-1 overflow-y-auto max-h-[280px] space-y-2 pr-1 font-mono text-xs">
+          <p class="text-slate-600 text-center py-10 font-pixel text-[10px] uppercase">&gt; SIN_INCIDENTES_REGISTRADOS</p>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- PIE DE PÁGINA TERMINAL -->
+  <footer class="border-t border-slate-900 bg-black py-3 px-6 text-center text-[10px] font-pixel text-slate-600">
+    Devin Alexander Vazquez Alonso &copy; 2026 | SafeBoxTravel &mdash; Internet de las cosas
+  </footer>
+
+  <!-- LÓGICA JAVASCRIPT -->
+  <script>
+    let socket = null;
+    let chartInstance = null;
+
+    // 1. Inicializar Gráfica
+    function initChart() {
+      const ctx = document.getElementById('chartImpacto').getContext('2d');
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Impacto (G)',
+            data: [],
+            borderColor: '#6366f1', // Indigo
+            backgroundColor: 'rgba(99, 102, 241, 0.05)',
+            borderWidth: 2,
+            pointBackgroundColor: '#818cf8',
+            fill: true,
+            tension: 0, // Líneas rectas para estilo pixel
+            pointRadius: 2,
+            pointHoverRadius: 5
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: { color: '#64748b', font: { family: 'Share Tech Mono', size: 10 } }
+            },
+            y: {
+              min: 0,
+              suggestedMax: 4,
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: { color: '#64748b', font: { family: 'Share Tech Mono', size: 10 } }
+            }
+          },
+          plugins: {
+            legend: { display: false }
+          }
+        }
+      });
+    }
+
+    // 2. Conectar WebSocket
+    function conectarWebSocket() {
+      const ip = document.getElementById('ipInput').value.trim();
+      const wsUrl = `ws://${ip}:8000/ws/telemetria`;
+
+      if (socket) socket.close();
+
+      actualizarEstadoWS('CONECTANDO...', 'bg-amber-500');
+
+      try {
+        socket = new WebSocket(wsUrl);
+
+        socket.onopen = () => {
+          actualizarEstadoWS('ONLINE', 'bg-emerald-500');
+        };
+
+        socket.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          procesarDatosTelemetria(data);
+        };
+
+        socket.onerror = () => {
+          actualizarEstadoWS('ERROR_CONEXION', 'bg-red-500');
+        };
+
+        socket.onclose = () => {
+          actualizarEstadoWS('OFFLINE', 'bg-red-500');
+        };
+
+      } catch (err) {
+        actualizarEstadoWS('IP_INVALIDA', 'bg-red-500');
+      }
+    }
+
+    // 3. Procesar datos del paquete
+    function procesarDatosTelemetria(data) {
+      document.getElementById('valImpacto').innerText = Number(data.impacto_g || 0).toFixed(2);
+      document.getElementById('valTemp').innerText = Number(data.temperatura_c || 0).toFixed(1);
+      document.getElementById('valHum').innerText = Number(data.humedad_pct || 0).toFixed(1);
+      document.getElementById('valNodo').innerText = data.node_id || 'ESP32_LOGISTICA';
+      document.getElementById('valSeq').innerText = data.sequence_id || 0;
+      
+      const horaActual = new Date().toLocaleTimeString();
+      document.getElementById('valTime').innerText = `// ULTIMA_ACT: ${horaActual}`;
+
+      // Badge Estado
+      const badge = document.getElementById('badgeEstado');
+      badge.innerText = (data.estado || 'Tránsito Seguro').toUpperCase();
+      
+      if (data.estado === 'Tránsito Seguro') {
+        badge.className = 'inline-block px-2.5 py-1 text-xs font-pixel bg-emerald-950 text-emerald-400 border border-emerald-700';
+      } else if (data.estado === 'Manejo Brusco (Caída)') {
+        badge.className = 'inline-block px-2.5 py-1 text-xs font-pixel bg-amber-950 text-amber-400 border border-amber-700';
+        registrarInfraccion(horaActual, 'CAIDA', `${data.impacto_g} G`);
+      } else if (data.estado === 'Exposición a Humedad Excesiva') {
+        badge.className = 'inline-block px-2.5 py-1 text-xs font-pixel bg-cyan-950 text-cyan-400 border border-cyan-700';
+        registrarInfraccion(horaActual, 'HUMEDAD', `${data.humedad_pct}% RH`);
+      } else { 
+        badge.className = 'inline-block px-2.5 py-1 text-xs font-pixel bg-rose-950 text-rose-400 border border-rose-700';
+        registrarInfraccion(horaActual, 'CRITICO', `IMP:${data.impacto_g}G HUM:${data.humedad_pct}%`);
+      }
+
+      // Actualizar Gráfica
+      if (chartInstance) {
+        chartInstance.data.labels.push(horaActual);
+        chartInstance.data.datasets[0].data.push(data.impacto_g);
+
+        if (chartInstance.data.labels.length > 20) {
+          chartInstance.data.labels.shift();
+          chartInstance.data.datasets[0].data.shift();
+        }
+        chartInstance.update();
+      }
+    }
+
+    // 4. Bitácora de Alertas
+    function registrarInfraccion(hora, tipo, detalle) {
+      const contenedor = document.getElementById('listaAlertas');
+      
+      if (contenedor.querySelector('p')) {
+        contenedor.innerHTML = '';
+      }
+
+      const item = document.createElement('div');
+      item.className = 'p-2 bg-black border-l-2 border-amber-500 border-b border-slate-900 flex justify-between items-center text-xs';
+      item.innerHTML = `
+        <div>
+          <span class="text-amber-400 font-pixel text-[10px]">[${tipo}]</span> 
+          <span class="text-slate-300 ml-1 font-mono">${detalle}</span>
+        </div>
+        <span class="text-slate-600 font-mono text-[10px]">${hora}</span>
+      `;
+
+      contenedor.prepend(item);
+    }
+
+    function limpiarBitacora() {
+      document.getElementById('listaAlertas').innerHTML = '<p class="text-slate-600 text-center py-10 font-pixel text-[10px] uppercase">&gt; SIN_INCIDENTES_REGISTRADOS</p>';
+    }
+
+    function actualizarEstadoWS(texto, claseColor) {
+      document.getElementById('statusText').innerText = texto;
+      document.getElementById('statusDot').className = `w-2.5 h-2.5 ${claseColor}`;
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initChart();
+      conectarWebSocket();
+    });
+  </script>
+</body>
+</html>
